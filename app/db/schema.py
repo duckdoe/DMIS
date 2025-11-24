@@ -1,3 +1,5 @@
+from connection import db_connection
+
 query = """
 
 CREATE TABLE IF NOT EXISTS patients (
@@ -60,3 +62,10 @@ CREATE TABLE IF NOT EXISTS doctor_patient (
 );
 
 """
+
+if __name__ == "__main__":
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(query)
+
+        conn.commit()
