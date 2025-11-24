@@ -1,3 +1,8 @@
+"""
+This only adds dummy data for the patients department and staff
+This is because the uuid generated for each of us will be different
+"""
+
 from connection import db_connection
 
 query = """
