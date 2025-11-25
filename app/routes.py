@@ -1,5 +1,5 @@
 from app import app
-from .db.models import printHello
+from .db.models import BaseModel
 
 
 @app.route("/")
