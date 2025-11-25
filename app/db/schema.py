@@ -3,7 +3,7 @@ from connection import db_connection
 query = """
 
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('receptionist','doctor','lab_technician')),
@@ -11,18 +11,17 @@ CREATE TABLE users (
 );
 
 CREATE TABLE patients (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
     dob DATE NOT NULL,
     gender VARCHAR(10) CHECK (gender IN ('male','female','other')),
-    phone VARCHAR(20),
     email VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE documents (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     uploader_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     file_name VARCHAR(255) NOT NULL,
@@ -33,7 +32,7 @@ CREATE TABLE documents (
 );
 
 CREATE TABLE visits (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     doctor_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -41,7 +40,7 @@ CREATE TABLE visits (
 );
 
 CREATE TABLE appointments (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     doctor_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     preferred_date TIMESTAMP NOT NULL,
@@ -52,7 +51,7 @@ CREATE TABLE appointments (
 );
 
 CREATE TABLE audit_logs (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
     action VARCHAR(50) NOT NULL,
     resource_type VARCHAR(50) NOT NULL,
