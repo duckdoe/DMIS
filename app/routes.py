@@ -1,7 +1,14 @@
 from app import app
-from .Models.models import printHello
+from .db.models import printHello
 
 
 @app.route("/")
 def index():
-    return printHello("Fortune")
+    data = BaseModel('user')
+
+    user = data.get(password="")
+
+    if not user:
+        return {"error": "User not found"}, 404
+    
+    
