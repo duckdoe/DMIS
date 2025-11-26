@@ -54,13 +54,13 @@ bcrypt.hashpw("".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 def verify_hashed_password(password, hashed_password):
     return bcrypt.checkpw(password.encode(), hashed_password.encode())
 
-def create_user(id, username, password_hash, role):
+def create_user(username, password_hash, role):
     hash_pw = hash_password(password_hash)
     with db_connection() as conn:
         cur = conn.cursor()
         cur.execute("""
         INSERT INTO users(username, password_hash, role)
-        VALUES(%s, %s, %s, %s)
+        VALUES(%s, %s, %s)
         RETURNING id;
         """, (username, hash_pw, role))
         conn.commit()
@@ -68,8 +68,8 @@ def register_patients(first_name, last_name, dob, gender, email):
     with db_connection() as conn:
         cur = conn.cursor()
         cur.execute("""
-        INSERT INTO patients(id, first_name, last_name, dob, gender, email)
-        VALUES(%s, %s, %s, %s, %s, %s)
+        INSERT INTO patients(first_name, last_name, dob, gender, email)
+        VALUES(%s, %s, %s, %s, %s)
         RETURNING id;
         """, (first_name, last_name, dob, gender, email))
         conn.commit()
