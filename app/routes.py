@@ -1,16 +1,26 @@
-from app import app
+# from app import app
+from .Utils.otp import authorize_user
 from .db.models import  BaseModel, create_appointment
 from flask import Flask, request, jsonify
 
-@app.route("/")
+app = Flask(__name__)
+
+# @app.route("/")
 # def index():
 #     return printHello("Fortune")
 
-app = Flask(__name__)
-
 @app.post('/appointments-requests')
 def create_appointments_request():
-    token = authorize
+    token = authorize_user
+    if token is None:
+        return jsonify({
+            "error": "no bearer token found"
+        }),404
+    if token is False:
+        return jsonify({
+            "error": "incorrect or invalid bearer token"
+        })
+
     data = request.get_json()
     patient_id = data.get('patient_id')
     doctor_id = data.get('doctor_id')
@@ -30,4 +40,4 @@ def create_appointments_request():
     appt = create_appointment(patient_id, doctor_id, preferred_date, reason)
     return jsonify({"message": "appointment requested","id":appt.id,"status":appt.status}),201
 
-app.
+
