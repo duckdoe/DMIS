@@ -5,10 +5,6 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# @app.route("/")
-# def index():
-#     return printHello("Fortune")
-
 @app.post('/appointments-requests')
 def create_appointments_request():
     token = authorize_user
