@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,6 +19,7 @@ def db_connection():
         host=DATABASE_HOST,
         password=DATABASE_PASSWORD,
         user=DATABASE_USER,
+        cursor_factory=RealDictCursor,
     )
 
     return connection
