@@ -9,7 +9,7 @@ import smtplib
 from email.mime.text import MIMEText
 import jwt
 from flask import request
-from session import r
+from app.session import r
 import pyotp
 import smtplib
 from email.mime.text import MIMEText
