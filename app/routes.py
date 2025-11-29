@@ -1,24 +1,8 @@
-<<<<<<< HEAD
 # from app import app
 from .Utils.mail import appointment_scheduled, appointment_rejected, appointment_rescheduled
 from .Utils.otp import authorize_user
 from .db.models import  BaseModel, create_appointment
 from flask import Flask, request, jsonify
-=======
-import os
-import jwt
-import datetime
-from flask import request
-from flask import jsonify
-from app import app
-from .db.models import BaseModel
-from .db.models import create_appointment
-from .utils.hash import hash_password
-from .utils.hash import verify
-from .utils.checkers import is_valid_date
-from .middleware import authenticate_user
-from .utils.rate_limiter import rate_limit
->>>>>>> origin
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
@@ -115,7 +99,6 @@ def login():
 
 @app.post("/appointments-requests")
 def create_appointments_request():
-<<<<<<< HEAD
     token = authorize_user()
     if token is None:
         return jsonify({
@@ -129,10 +112,6 @@ def create_appointments_request():
         return jsonify({
             "error": "unauthorized"
         }),403
-=======
-    authenticate_user()  # Checks whether the user is logged into our system.
-
->>>>>>> origin
     data = request.get_json()
     patient_id = data.get("patient_id")
     doctor_id = data.get("doctor_id")
@@ -185,7 +164,6 @@ def create_appointments_request():
             404,
         )
 
-<<<<<<< HEAD
 @app.get('/appointments/pending')
 def pending_appointments():
     token = authorize_user()
@@ -452,12 +430,6 @@ def view_visits():
     }), 200
 
 
-=======
-    # Made code more pythonic now returning different messages based on what happened
-    role = user.get("role")
-    if role != "doctor":
-        return jsonify({"error": "This staff is not a doctor"}), 409
->>>>>>> origin
 
     appointments.set(
         patient_id=patient_id,
