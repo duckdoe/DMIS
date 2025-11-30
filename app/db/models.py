@@ -1,10 +1,6 @@
-import bcrypt
-
 """
 This file contains all the functions for querying the database.
 """
-
-import datetime
 from .connection import db_connection
 
 
@@ -81,8 +77,20 @@ class BaseModel:
             cur.execute(f"""DELETE FROM {self.table} WHERE {keys}""", values)
             conn.commit()
 
+    def search_patients_like(self, query):
+       like = f"%{query}%"
+       with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT * FROM patients
+            WHERE name LIKE %s
+            OR phone LIKE %s
+            OR email LIKE %s
+        """, (like, like, like))
+        return cur.fetchall()
 
-users = BaseModel("users")
+
+# users = BaseModel("users")
 
 # users.set(username="fortune", password_hash="fortune123", role="doctor")
 # users.update(
