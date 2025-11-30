@@ -1,8 +1,9 @@
 import bcrypt
 
+salt = bcrypt.gensalt()
+
 
 def hash_password(password):
-    salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
     return hashed
 

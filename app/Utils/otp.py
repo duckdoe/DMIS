@@ -79,7 +79,7 @@ def verify_token(token: str):
 
 def authorize_user():
     header = request.headers.get('Authorization')
-# headers = {"Authorization": f"Bearer {token}"}
+    # headers = {"Authorization": f"Bearer {token}"}
     if not header or not header.startswith('Bearer'):
         return None
     try:

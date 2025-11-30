@@ -8,24 +8,29 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 def authenticate_user():
     """
-    Docstring for authenticate_user
+    This function is used for authentication and returns its own custom response
 
-    This function is used to authenticate whether or not
-    a use has logged into the system.
+    Responses sent are usually tuples, while the decoded message is a ``<class 'dict'>``
     """
 
     bearer = request.headers.get("Authorization")
 
-    if not bearer.startswith("Bearer "):
+    if not bearer:
+        return jsonify({"error": "Authorization header was not provided"}), 400
+
+    if not bearer.startswith("Bearer"):
         return (
-            jsonify({"error": "No bearer token was provided, failed to authenticate"}),
+            jsonify({"error": "No bearer token was found, failed to authenticate"}),
             400,
         )
 
     token = bearer.split()[1]
 
     if not token:
-        return jsonify({"error": "No token provided, failed to autheticat"}), 400
+        return (
+            jsonify({"error": "No token provided, failed to autheticate request"}),
+            400,
+        )
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
@@ -38,6 +43,7 @@ def authenticate_user():
                 ),
                 400,
             )
+        return payload
     except (
         jwt.InvalidTokenError,
         jwt.ExpiredSignatureError,

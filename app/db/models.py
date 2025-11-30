@@ -93,8 +93,7 @@ users = BaseModel("users")
 # )
 
 # users.delete(username="fortune")
-user = users.get(username="fortune")
-print(user.get("id"))
+# user = users.get(username="fortune")
 
 
 # patients = BaseModel("patients")
