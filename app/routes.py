@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, jsonify, send_from_directory, url_for
-from ..db.models import BaseModel, create_documents
-from route.upload_route import allowed_file, create_folder, create_patient_folder
+from .db.models import BaseModel, create_documents
+from app.upload_route import allowed_file, create_folder, create_patient_folder
 from werkzeug.utils import secure_filename
 app = Flask(__name__)
 
