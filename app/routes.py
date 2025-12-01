@@ -1,9 +1,8 @@
 import os
 from flask import request, jsonify, send_from_directory, url_for
-from .db.models import BaseModel, create_documents
+from .db.models import BaseModel, create_documents,create_appointment
 from app.upload_route import allowed_file, create_folder, create_patient_folder
 from werkzeug.utils import secure_filename
-from .utils.mail import send_email
 import datetime
 import jwt
 from app import app
@@ -16,6 +15,7 @@ from .utils.hash import hash_password, verify
 from .utils.mail import appointment_scheduled
 from .utils.mail import appointment_rejected
 from .utils.mail import appointment_rescheduled
+from .utils.mail import send_email
 from .utils.mail import send_patient_email
 from .db.models import BaseModel
 from flask import request
@@ -33,7 +33,6 @@ from .utils.hash import hash_password
 from .utils.hash import verify
 from .utils.checkers import is_valid_date
 from .middleware import authenticate_user
-from .utils.rate_limiter import rate_limit
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
