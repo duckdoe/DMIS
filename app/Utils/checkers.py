@@ -5,6 +5,6 @@ from datetime import date
 def is_valid_date(date):
     try:
         parsed_date = parse(date)
-        return parsed_date.date()
+        return parsed_date
     except Exception as e:
         return None

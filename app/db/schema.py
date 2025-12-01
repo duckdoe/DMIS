@@ -1,10 +1,12 @@
-from .connection import db_connection
+from connection import db_connection
 
 query = """
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(50) UNIQUE NOT NULL,
+    firstname VARCHAR(50) NOT NULL,
+    lastname VARCHAR(50) NOT NULL,
+    email VARCHAR(50) NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('receptionist','doctor','lab_technician')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -13,11 +15,11 @@ CREATE TABLE users (
 CREATE TABLE staff(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     firstname VARCHAR(50) NOT NULL,
-    lastname VARCAHR(50),
+    lastname VARCHAR(50),
     email VARCHAR(50) NOT NULL,
-    position VARCAHR(50) NOT NULL,
+    position VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
+);
 
 CREATE TABLE doctors(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,22 +28,20 @@ CREATE TABLE doctors(
     email VARCHAR(255) NOT NULL,
     specialization VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
+);
 
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
-    dob DATE NOT NULL,
-    gender VARCHAR(10) CHECK (gender IN ('male','female','other')),
     email VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    uploader_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    uploader_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     file_name VARCHAR(255) NOT NULL,
     storage_path TEXT NOT NULL,
     mime_type VARCHAR(50) NOT NULL,
@@ -51,16 +51,16 @@ CREATE TABLE documents (
 
 CREATE TABLE visits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    doctor_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
 );
 
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    doctor_id INT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     preferred_date TIMESTAMP NOT NULL,
     approved_date TIMESTAMP,
     status VARCHAR(20) NOT NULL CHECK (status IN ('PENDING','APPROVED','REJECTED','RESCHEDULED')) DEFAULT 'PENDING',
@@ -70,7 +70,7 @@ CREATE TABLE appointments (
 
 CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id INT REFERENCES users(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action VARCHAR(50) NOT NULL,
     resource_type VARCHAR(50) NOT NULL,
     resource_id INT,
@@ -79,14 +79,15 @@ CREATE TABLE audit_logs (
 
 CREATE TABLE patient_records(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id UUID REFERENCES patients(id) NOT NULL ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id)  ON DELETE CASCADE,
+    dob DATE NOT NULL,
+    gender VARCHAR(10) CHECK (gender IN ('male','female','other')),
     height SMALLINT,
     weight SMALLINT,
     blood_type VARCHAR(3),
     organ_donor BOOLEAN DEFAULT FALSE,
     allergies TEXT,
     medical_conditions TEXT
-
 )
 
 """

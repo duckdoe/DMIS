@@ -6,31 +6,27 @@ from werkzeug.utils import secure_filename
 from .utils.mail import send_email
 import datetime
 import jwt
-from .utils.mail import (
-    appointment_scheduled,
-    appointment_rejected,
-    appointment_rescheduled,
-)
 from app import app
 from .utils.format import format_date
 from .utils.format import format_time
-from .utils.otp import authorize_user
+from .utils.otp import generate_otp, verify_otp, send_otp_mail
 from .db.models import BaseModel, create_appointment
 from .utils.rate_limiter import rate_limit
 from .utils.hash import hash_password, verify
 from .utils.mail import appointment_scheduled
 from .utils.mail import appointment_rejected
 from .utils.mail import appointment_rescheduled
+from .utils.mail import send_patient_email
 from .db.models import BaseModel
 from flask import request
 from flask import jsonify
+from flask import url_for
 import os
 import jwt
 import datetime
 from flask import request
 from flask import jsonify
 from app import app
-from datetime import datetime
 from .db.models import BaseModel
 from .db.models import create_appointment
 from .utils.hash import hash_password
@@ -52,24 +48,32 @@ def before_request():
 def signup():
     if request.is_json:
         data = request.get_json()
-        username = data.get("username")
+        firstname = data.get("firstname")
+        lastname = data.get("lastname")
+        email = data.get("email")
         password = data.get("password")
         role = data.get("role")
 
-        if not all([username, password, role]):
+        if not all([firstname, lastname, email, password, role]):
             return (
                 jsonify({"error": "Missing field in payload"}),
                 400,
             )
 
         users = BaseModel("users")
-        user = users.get(username=username)
+        user = users.get(email=email)
 
         if user:
             return jsonify({"error": "User already exists"}), 409
 
         hashed_password = hash_password(password)
-        users.set(username=username, password_hash=hashed_password, role=role)
+        users.set(
+            firstname=firstname,
+            lastname=lastname,
+            email=email,
+            password_hash=hashed_password,
+            role=role,
+        )
 
         return jsonify({"message": "User signup successful"}), 201
 
@@ -86,15 +90,15 @@ def login():
     if request.is_json:
         data = request.get_json()
 
-        username = data.get("username")
+        email = data.get("email")
         password = data.get("password")
 
-        if not all([username, password]):
+        if not all([email, password]):
             return jsonify({"error": "Missing field in payload"}), 400
 
         users = BaseModel("users")
 
-        user = users.get(username=username)
+        user = users.get(email=email)
 
         if not user:
             return jsonify({"error": "User does not exist"}), 404
@@ -105,7 +109,11 @@ def login():
         if not is_same_password:
             return jsonify({"error": "Incorrect password"}), 400
 
-        payload = {"id": user.get("id"), "role": user.get("role")}
+        payload = {
+            "id": user.get("id"),
+            "role": user.get("role"),
+            "email": user.get("email"),
+        }
         token = jwt.encode(
             payload, SECRET_KEY, algorithm="HS256"
         )  # Generate jwt token for user
@@ -129,16 +137,10 @@ def create_patient():
 
         firstname = data.get("firstname")
         lastname = data.get("lastname")
-        dob = data.get("dob")
-        gender = data.get("gender")
         email = data.get("email")
 
-        if not all([firstname, lastname, dob, gender, email]):
+        if not all([firstname, lastname, email]):
             return jsonify({"error": "Missing fields in payload"}), 400
-
-        dob_valid = is_valid_date()
-        if not dob_valid:
-            return jsonify({"error": "Invalid date provided in payload"}), 400
 
         token = authenticate_user()
         if type(token) != dict:
@@ -154,10 +156,107 @@ def create_patient():
             return jsonify({"error": "Patient already exists"}), 409
 
         patient_model.set(
-            firstname=firstname, lastname=lastname, dob=dob, gender=gender, email=email
+            first_name=firstname,
+            last_name=lastname,
+            email=email,
         )
 
-        return jsonify({"success": "Patient created successfully"}), 201
+        # Send email to patient with login url
+
+        patient = patient_model.get(email=email)
+        if not patient:
+            return jsonify({"error": "Unable to create patient"}), 500
+
+        login_url = url_for("patient_login", id=patient.get("id"), _external=True)
+
+        email_message = f"""
+        You have been registered successfully, here is your link to login and request appointments.\n\n {login_url}\n Do not share this with anyone"""
+
+        send_patient_email(
+            email_to=email,
+            body=email_message,
+        )
+
+        return (
+            jsonify({"success": "Patient created successfully", "url": login_url}),
+            201,
+        )
+
+    return (
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        400,
+    )
+
+
+@app.post("/patient/login")
+def patient_login():
+    if request.is_json:
+        id = request.args.get("id")
+
+        data = request.get_json()
+        email = data.get("email")
+
+        if not all([id, email]):
+            return jsonify({"error": "Missing fields in payload check url?"}), 400
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=id)
+
+        if not patient:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        otp = generate_otp(email)
+        sent = send_otp_mail(email, otp)
+        if not sent:
+            return (
+                jsonify({"error": "Something went wrong when trying to send email"}),
+                500,
+            )
+
+        return jsonify({"success": "Otp sent to provided email verify"})
+
+    return (
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        400,
+    )
+
+
+@app.post("/patient/verify-otp")
+def verify_patient_otp():
+    if request.is_json:
+        id = request.args.get("id")
+
+        data = request.get_json()
+        otp = data.get("otp")
+
+        if not all([id, otp]):
+            return jsonify({"error": "Missing fields in payload check url?"}), 400
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=id)
+
+        if not patient:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        is_correct = verify_otp(patient.get("email"), otp)
+        if not is_correct:
+            return jsonify({"error": "Invalid or expired otp provided"}), 400
+
+        token = jwt.encode(
+            {"id": patient.get("id"), "email": patient.get("email")},
+            SECRET_KEY,
+            algorithm="HS256",
+        )
+
+        return jsonify({"success": "Otp verification successful", "token": token})
 
     return (
         jsonify(
@@ -207,25 +306,60 @@ def get_patients():
 
 
 @app.put("/patients/<id>")  # updating a patient
-def update_patients(
-    id, first_name=None, last_name=None, dob=None, gender=None, email=None
-):
-    data = BaseModel("patients")
-    body = request.get_json()
+def update_patients(id):
+    if request.is_json:
 
-    patient = data.update(
-        where={"id": id},
-        first_name=body.get("first_name"),
-        last_name=body.get("last_name"),
-        dob=body.get("dob"),
-        gender=body.get("gender"),
-        email=body.get("email"),
+        token = authenticate_user()
+
+        if type(token) != dict:
+            return token
+
+        role = token.get("role")
+        patient_id = token.get("id")
+
+        if role != "receptionist":
+            return jsonify({"error": "Unauthorized access"}), 403
+
+        data = request.get_json()
+
+        firstname = data.get("firstname")
+        lastname = data.get("lastname")
+
+        if not is_valid_date(dob):
+            return (
+                jsonify({"error": "Invalid date format provided as date of birth"}),
+                400,
+            )
+
+        dob = is_valid_date(data.get("dob"))
+        gender = data.get("gender")
+        email = data.get("email")
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=patient_id)
+
+        if not patient:
+            return jsonify({"error": "Patient not found"}), 404
+
+        complete_fields = []
+        for field in [firstname, lastname, dob, gender, email]:
+            if not field:
+                continue
+            complete_fields.append(field)
+
+        patient_model.update(
+            where={"id": id},
+        )
+        return {"Patient Updated Successfully": patient}, 200
+
+    return (
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        400,
     )
-
-    if not patient:
-        return {"error": "Patient not found"}, 404
-
-    return {"Patient Updated Successfully": patient}, 200
 
 
 @app.delete("/patients/<id>")  # deleting a patient
@@ -307,16 +441,6 @@ def uploaded_file(patient_id, file_name):
 
 @app.post("/appointments-requests")
 def create_appointments_request():
-    token = authorize_user()
-
-    if type(token) != dict:
-        return token
-
-    data = request.get_json()
-    patient_id = data.get("patient_id")
-    doctor_id = data.get("doctor_id")
-    preferred_date = data.get("preferred_date")
-    reason = data.get("reason")
     """
     Route for creating an appointment request
 
@@ -331,7 +455,7 @@ def create_appointments_request():
     reason
     """
 
-    if request.is_json():
+    if request.is_json:
         token = (
             authenticate_user()
         )  # Checks whether the user is logged into our system.
@@ -342,13 +466,15 @@ def create_appointments_request():
             return token
 
         data = request.get_json()
-        patient_id = data.get("patient_id")
-        doctor_id = data.get("doctor_id")
+        doctor_name = data.get("doctor_name")
         preferred_date = data.get("preferred_date")
         reason = data.get("reason")
 
+        if not all([doctor_name, preferred_date, reason]):
+            return (jsonify({"error": "Missing fields in payload"}), 400)
+
         # Checks if the time provided is a valid date and not a random string
-        preferred_date = is_valid_date()
+        preferred_date = is_valid_date(preferred_date)
         if not preferred_date:
             return (
                 jsonify(
@@ -362,7 +488,7 @@ def create_appointments_request():
         # Checks if the time provided is an hour greater than the current time
         if (
             preferred_date <= current_date
-            or preferred_date <= current_date + datetime.timedelta(min=60)
+            or preferred_date <= current_date + datetime.timedelta(minutes=60)
         ):
             return (
                 jsonify(
@@ -370,6 +496,27 @@ def create_appointments_request():
                 ),
                 400,
             )
+
+        # Check if the person accessing the route is a patient
+        patient_id = token.get("id")
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=patient_id)
+
+        if not patient:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        # Checks whether the doctor exisits
+        doctor_model = BaseModel("users")
+        doctor = doctor_model.get(firstname=doctor_name, role="doctor")
+
+        if not doctor:
+            return (
+                jsonify({"error": "User is either not a doctor or does not exist"}),
+                404,
+            )
+
+        doctor_id = doctor.get("id")
 
         # Checks if the doctor that was requested for an appointment is already booked.
         appointments = BaseModel("appointments")
@@ -383,14 +530,6 @@ def create_appointments_request():
                 ),
                 409,
             )
-
-        if not all([patient_id, doctor_id, preferred_date, reason]):
-            return (jsonify({"error": "Missing fields in payload"}), 400)
-
-        users = BaseModel("users")
-        user = users.get(id=id)
-        if not user:
-            return {"error": "User not found"}, 404
 
         appointments.set(
             patient_id=patient_id,
@@ -408,13 +547,19 @@ def create_appointments_request():
                 {"error": "An error ocurred while trying to create the appointment"}
             )
 
+        return jsonify({"success": "Appointment created sucessfully"}), 201
+
     return (
-        jsonify({"error": "No doctor found with the corresponding information"}),
-        404,
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        500,
     )
 
 
-@app.get("/appointments/pending")
+@app.get("/appointments/<id>/pending")
 def pending_appointments(id):
     """
     This route lists all the pending appointments
@@ -426,8 +571,11 @@ def pending_appointments(id):
     if type(token) != dict:
         return token
 
-    doctor_id = token.get("user_id")
+    doctor_id = token.get("id")
     appointment_model = BaseModel("appointments")
+
+    if id != doctor_id:
+        return jsonify({"error": "Invalid id given"})
 
     # Gets all pending appointments and returns them as a response
     appointments = appointment_model.get(doctor_id=doctor_id, status="PENDING")
@@ -457,7 +605,9 @@ def approve_appointments(id):
         if status.upper() != "APPROVED":
             return jsonify({"error": "Invalid status provided, try 'approved'?"}), 400
 
-        doctor_id = token.get("user_id")
+        appointments_model = BaseModel("appointments")
+
+        doctor_id = token.get("id")
         appointment = appointments_model.get(id=id)
 
         # Checks if the appointment being approved exists
@@ -495,7 +645,6 @@ def approve_appointments(id):
             status="APPROVED", where={"id": id, "doctor_id": doctor_id}
         )
 
-        appointments_model = BaseModel("appointments")
         patient_model = BaseModel("patients")
 
         patient_id = appointment.get("patient_id")
@@ -510,8 +659,8 @@ def approve_appointments(id):
 
         patient_email = patient.get("email")
 
-        appointment_date = appointment.get("preferred_date").split("T")[0]
-        appointment_time = appointment.get("preferred_date").split("T")[1]
+        appointment_date = appointment.get("preferred_date").strftime("%d/%m/%Y")
+        appointment_time = appointment.get("preferred_date").strftime("%H:%M:%S")
 
         doctor_model = BaseModel("users")
         doctor = doctor_model.get(id=doctor_id, role="doctor")
@@ -520,7 +669,7 @@ def approve_appointments(id):
             return jsonify({"error": "Doctor not found"})
 
         # Format the doctors name
-        doctor_name = f"{doctor.get('first_name')} {doctor.get('last_name')}"
+        doctor_name = f"{doctor.get('firstname')} {doctor.get('lastname')}"
 
         if not patient_email:
             return jsonify({"error": "Patient's email was not found"}), 404
