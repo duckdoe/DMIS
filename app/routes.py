@@ -1,29 +1,23 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory, url_for
+from flask import request, jsonify, send_from_directory, url_for
 from .db.models import BaseModel, create_documents
 from app.upload_route import allowed_file, create_folder, create_patient_folder
 from werkzeug.utils import secure_filename
-# from app import app
+from .utils.mail import send_email
 import datetime
 import jwt
-from .utils.mail import appointment_scheduled, appointment_rejected, appointment_rescheduled
+from .utils.mail import (
+    appointment_scheduled,
+    appointment_rejected,
+    appointment_rescheduled,
+)
+from app import app
+from .utils.format import format_date
+from .utils.format import format_time
 from .utils.otp import authorize_user
-from .db.models import  BaseModel, create_appointment
+from .db.models import BaseModel, create_appointment
 from .utils.rate_limiter import rate_limit
 from .utils.hash import hash_password, verify
-
-app = Flask(__name__)
-"""
-This file contains all the routes needed for::
-
-Registration
-Login
-Appointments
-Visits
-File uploading
-Patients
-"""
-
 from .utils.mail import appointment_scheduled
 from .utils.mail import appointment_rejected
 from .utils.mail import appointment_rescheduled
@@ -33,7 +27,6 @@ from flask import jsonify
 import os
 import jwt
 import datetime
-from datetime import date
 from flask import request
 from flask import jsonify
 from app import app
@@ -52,12 +45,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 @app.before_request
 def before_request():
     # Limits the amounts of requests recieved to a 100
-    return rate_limit(100)
-
-
-@app.route("/")
-def index():
-    return {"message": "Hello"}, 200
+    return rate_limit(20)
 
 
 @app.post("/auth/signup")
@@ -133,76 +121,129 @@ def login():
         400,
     )
 
-#---- PATIENT ROUTES ----#
-@app.post("/patient")
-def create_patient():
-    body = request.get_json()
-    data = BaseModel("patients")
 
-    data.set(
-        first_name=body["first_name"],
-        last_name=body["last_name"],
-        dob=body["dob"],
-        gender=body["gender"],
-        email=body["email"]
+@app.post("/patient/create")
+def create_patient():
+    if request.is_json:
+        data = request.get_json()
+
+        firstname = data.get("firstname")
+        lastname = data.get("lastname")
+        dob = data.get("dob")
+        gender = data.get("gender")
+        email = data.get("email")
+
+        if not all([firstname, lastname, dob, gender, email]):
+            return jsonify({"error": "Missing fields in payload"}), 400
+
+        dob_valid = is_valid_date()
+        if not dob_valid:
+            return jsonify({"error": "Invalid date provided in payload"}), 400
+
+        token = authenticate_user()
+        if type(token) != dict:
+            return token
+
+        if token.get("role") != "receptionist":
+            return jsonify({"error": "Not authorized to access route"}), 403
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(email=email)
+
+        if patient:
+            return jsonify({"error": "Patient already exists"}), 409
+
+        patient_model.set(
+            firstname=firstname, lastname=lastname, dob=dob, gender=gender, email=email
+        )
+
+        return jsonify({"success": "Patient created successfully"}), 201
+
+    return (
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        400,
     )
 
-    return {"message": "Patient Registered Successfully"}, 201
 
-@app.get("/patients/<id>") #getting a single patient
+@app.get("/patients/<id>")  # getting a single patient
 def get_patient(id):
-    data = BaseModel('patients')
+    if request.is_json:
+        token = authenticate_user()
+        if type(token) != dict:
+            return token
 
-    patient = data.get(id=id)
-    if not patient:
-        return {"error": "Patient not found"}, 404
-    
-    return {"Patient Details": patient}, 200
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=id)
 
-@app.get("/patients") #searching patients with specific keywords
+        if not patient:
+            return jsonify({"error": "Patient not found"}), 404
+
+        return (
+            jsonify({"success": "Patient retrieved successfully", "patient": patient}),
+            200,
+        )
+    return (
+        jsonify(
+            {
+                "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+            }
+        ),
+        400,
+    )
+
+
+@app.get("/patients")  # searching patients with specific keywords
 def get_patients():
     search = request.args.get("search")
     data = BaseModel("patients")
     if search:
         return data.search_patients_like(search)
-    
+
     return data.get(all=True)
 
-@app.put("/patients/<id>") #updating a patient
-def update_patients(id,first_name=None,last_name=None,dob=None,gender=None, email=None):
+
+@app.put("/patients/<id>")  # updating a patient
+def update_patients(
+    id, first_name=None, last_name=None, dob=None, gender=None, email=None
+):
     data = BaseModel("patients")
     body = request.get_json()
-    
-    patient=data.update(
-    where={"id": id},
-    first_name=body.get("first_name"),
-    last_name=body.get("last_name"),
-    dob=body.get("dob"),
-    gender=body.get("gender"),
-    email=body.get("email")
-   )
+
+    patient = data.update(
+        where={"id": id},
+        first_name=body.get("first_name"),
+        last_name=body.get("last_name"),
+        dob=body.get("dob"),
+        gender=body.get("gender"),
+        email=body.get("email"),
+    )
 
     if not patient:
         return {"error": "Patient not found"}, 404
-    
+
     return {"Patient Updated Successfully": patient}, 200
 
-@app.delete("/patients/<id>") #deleting a patient
+
+@app.delete("/patients/<id>")  # deleting a patient
 def delete_patient(id):
     data = BaseModel("patients")
-    
+
     patient = data.delete(id=id)
     if not patient:
         return {"error": "Patient not found"}, 404
-    
+
     return {"Patient Deleted Successfully": patient}, 200
 
 
-#---- DOCUMENT ROUTES ----#
-@app.post("/patients/<id>/documents") #uploading a patient documents
+# ---- DOCUMENT ROUTES ----#
+@app.post("/patients/<id>/documents")  # uploading a patient documents
 def upload_document(id):
     file = request.files.get("file")
-    
+
     if not file or file.filename == "":
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -216,10 +257,14 @@ def upload_document(id):
     file_path = os.path.join(patient_folder, filename)
     file.save(file_path)
 
-    file_url = url_for('uploaded_file', patient_id=id, file_name=filename, _external=True)
+    file_url = url_for(
+        "uploaded_file", patient_id=id, file_name=filename, _external=True
+    )
 
     # optional form fields
-    uploader_id = request.form.get("uploader_id")  # optional, expect UUID string or None
+    uploader_id = request.form.get(
+        "uploader_id"
+    )  # optional, expect UUID string or None
     document_type = request.form.get("document_type")  # optional
     mime_type = file.mimetype if hasattr(file, "mimetype") else None
 
@@ -229,7 +274,7 @@ def upload_document(id):
         file_name=filename,
         storage_path=file_path,
         mime_type=mime_type,
-        document_type=document_type
+        document_type=document_type,
     )
 
     if not document_id:
@@ -237,39 +282,36 @@ def upload_document(id):
 
     return {"Document Uploaded Successfully": {"id": document_id, "url": file_url}}, 200
 
-@app.get("/patients/<id>/documents") #listing all documents of a patient
+
+@app.get("/patients/<id>/documents")  # listing all documents of a patient
 def list_patient_documents(id: int):
-    docs = BaseModel('documents')
-    
+    docs = BaseModel("documents")
+
     # get all documents for this patient
     documents = docs.get(all=True, patient_id=id)
-    
+
     return {
         "message": "Documents for patient",
         "patient_id": id,
-        "documents": documents
+        "documents": documents,
     }
 
-@app.get('/documents/<patient_id>/download/<file_name>') #to download or preview documents of patients
+
+@app.get(
+    "/documents/<patient_id>/download/<file_name>"
+)  # to download or preview documents of patients
 def uploaded_file(patient_id, file_name):
-    patient_folder = os.path.join(app.config['UPLOAD_FOLDER'], patient_id)
+    patient_folder = os.path.join(app.config["UPLOAD_FOLDER"], patient_id)
     return send_from_directory(patient_folder, file_name)
+
 
 @app.post("/appointments-requests")
 def create_appointments_request():
     token = authorize_user()
-    if token is None:
-        return jsonify({
-            "error": "no bearer token found"
-        }),404
-    if token is False:
-        return jsonify({
-            "error": "incorrect or invalid bearer token"
-        })
-    if token['role'] != 'receptionist':
-        return jsonify({
-            "error": "unauthorized"
-        }),403
+
+    if type(token) != dict:
+        return token
+
     data = request.get_json()
     patient_id = data.get("patient_id")
     doctor_id = data.get("doctor_id")
@@ -349,22 +391,38 @@ def create_appointments_request():
         user = users.get(id=id)
         if not user:
             return {"error": "User not found"}, 404
-    return (
-                jsonify(
-                    {"error": "No doctor found with the corresponding information"}
-                ),
-                404,
+
+        appointments.set(
+            patient_id=patient_id,
+            doctor_id=doctor_id,
+            preferred_date=preferred_date,
+            reason=reason,
+        )
+
+        new_appointment = appointments.get(
+            doctor_id=doctor_id, preferred_date=preferred_date
+        )
+
+        if not new_appointment:
+            return jsonify(
+                {"error": "An error ocurred while trying to create the appointment"}
             )
 
-@app.get('/appointments/pending')
-def pending_appointments():
+    return (
+        jsonify({"error": "No doctor found with the corresponding information"}),
+        404,
+    )
+
+
+@app.get("/appointments/pending")
+def pending_appointments(id):
     """
     This route lists all the pending appointments
     """
 
     token = authenticate_user()
 
-    # Checks whether the authenticat_user() function returns something if so it becomes the response
+    # Checks whether the authenticat_user() function returns a valid response
     if type(token) != dict:
         return token
 
@@ -478,7 +536,7 @@ def approve_appointments(id):
         return (
             jsonify(
                 {
-                    "message": "appointment approved and email sent",
+                    "message": "Appointment approved and email sent successfully",
                     "appointment_id": id,
                 }
             ),
@@ -503,6 +561,20 @@ def reject_appointment(id):
         if type(token) != dict:
             return token
 
+        data = request.get_json()
+
+        reason = data.get("reason")
+
+        if not reason:
+            return (
+                jsonify(
+                    {
+                        "error": "Need reason for rejection warning, whatever your reason is will be sent as an email to the patient"
+                    }
+                ),
+                400,
+            )
+
         doctor_id = token.get("user_id")
         appointments_model = BaseModel("appointments")
         patient_model = BaseModel("patients")
@@ -514,14 +586,24 @@ def reject_appointment(id):
             return jsonify({"error": "appointment not found"}), 404
 
         if appointments.get("doctor_id") != doctor_id:
-            return jsonify({"error": "not authorized for this appointment"}), 403
-        if appointments.get("status") != "PENDING":
-            return jsonify({"error": "appointment not in pending state"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Doctor trying to access this route is not the one appointed to said patient"
+                    }
+                ),
+                403,
+            )
 
-        # Update of said appointment
-        appointments_model.update(
-            status="REJECTED", where={"id": id, "doctor_id": doctor_id}
-        )
+        if appointments.get("status") != "PENDING":
+            return (
+                jsonify(
+                    {
+                        "error": "Appointment has either already been approved or rejected to continue you will need an otp"
+                    }
+                ),
+                400,
+            )
 
         # Send email update to user telling them their appointment was rejected
         patient = patient_model.get(id=appointments.get("patient_id"))
@@ -536,28 +618,54 @@ def reject_appointment(id):
                 404,
             )
 
-        patient_email = patient.get("email")
         appointment_date = appointments.get("preferred_date").split("T")[0]
         appointment_time = appointments.get("preferred_date").split("T")[1]
 
-        doctor_model = BaseModel("users")
-        doctor_data = doctor_model.get(id=doctor_id)
-        if doctor_data:
-            doctor_data = doctor_data[0]
-            doctor_name = (
-                f"{doctor_data.get('first_name')} {doctor_data.get('last_name')}"
-            )
-        else:
-            doctor_name = f"Dr. {doctor_id}"
+        doctor_model = BaseModel("doctor")
+        doctor = doctor_model.get(id=doctor_id)
 
-        if patient_email:
-            appointment_rejected(
-                patient_email, doctor_name, appointment_date, appointment_time
+        if not doctor:
+            return jsonify({"error": "Doctor not found"})
+
+        name = f"Dr. {doctor.get("firstname")} {doctor.get('lastname')}"
+
+        if not patient.get("email"):
+            return (
+                jsonify(
+                    {
+                        "error": "Error sending email, patient does not have a valid email"
+                    }
+                ),
+                500,
             )
+
+        # The email and all of the information concerning it
+        subject = "Appointment rejection"
+        email_message = f"""
+                            Hello {patient.get("firstname")} {patient.get("lastname")}\n 
+                            Your appointment with {name} made on the {appointment_date} {appointment_time} has been rejected for the following reason.\n\n
+                            '{reason}'.\n\n
+
+                            Please consider rescheduling with the same doctor or a different doctor.\nThank you for your understanding.
+                        """
+
+        sent = send_email(patient.get("email"), email_message, subject)  # Sends email.
+
+        # Checks whether or not the email was sent successfully.
+        if not sent:
+            return jsonify({"Error during sending of email try again"}), 500
+
+        # Update of said appointment
+        appointments_model.update(
+            status="REJECTED", where={"id": id, "doctor_id": doctor_id}
+        )
 
         return (
             jsonify(
-                {"message": "appointment rejected and email sent", "appointment_id": id}
+                {
+                    "message": "Appointment rejected email sent successfully",
+                    "appointment_id": id,
+                }
             ),
             200,
         )
@@ -572,7 +680,7 @@ def reject_appointment(id):
     )
 
 
-@app.patch("/appointments/<id>/reschedule")
+@app.patch("/appointment/<id>/reschedule")
 def reschedule_appointment(id):
     if request.is_json:
         token = authenticate_user()
@@ -581,60 +689,139 @@ def reschedule_appointment(id):
             return token
 
         doctor_id = token.get("user_id")
-        appt_model = BaseModel("appointments")
-        patient_model = BaseModel("patients")
+        appointment_model = BaseModel("appointments")
 
-        appts = appt_model.get(id=id)
-        if not appts:
-            return jsonify({"error": "appointment not found"}), 404
+        appointment = appointment_model.get(id=id)
 
-        appt = appts[0]
-        if appt.get("doctor_id") != doctor_id:
-            return jsonify({"error": "not authorized for this appointment"}), 403
-        if appt.get("status") != "PENDING":
-            return jsonify({"error": "appointment not in pending state"}), 400
+        if not appointment:
+            return jsonify({"error": "Appointment not found"}), 404
 
-        # Get new preferred_date from request
+        if appointment.get("id") != doctor_id:
+            return (
+                jsonify(
+                    {
+                        "error": "Doctor trying to rescheduling this appointment is not the same as the one requested for the appointment"
+                    }
+                ),
+                409,
+            )
+
+        if appointment.get("status") != "PENDING":
+            return jsonify(
+                {
+                    "error": "Appointment has either been rejected, approved or rescheduled, to "
+                }
+            )
+
         data = request.get_json()
-        new_date_time = data.get("preferred_date")
-        if not new_date_time:
-            return jsonify({"error": "new preferred_date required"}), 400
+        new_time = data.get("preferred_date")
 
-        old_date_time = appt.get("preferred_date")
+        if not new_time:
+            return jsonify({"error": "New rescheduled date was not recieved"}), 400
 
-        # Update appointment
-        appt_model.update(
-            preferred_date=new_date_time, where={"id": id, "doctor_id": doctor_id}
+        if not is_valid_date(new_time):
+            return (
+                jsonify(
+                    {
+                        "error": "This date provided is not a vaild date consider re-formatting the date"
+                    }
+                ),
+                400,
+            )
+
+        old_time = appointment.get("preffered_date")
+
+        if new_time == old_time or new_time < old_time:
+            return jsonify(
+                {
+                    "error": "The new time for the appointment must be greater than the old time"
+                }
+            )
+        if new_time <= old_time + datetime.timedelta(min=60):
+            return (
+                jsonify(
+                    {"error": "Pick a preferred date that is atleast an hour from now"}
+                ),
+                400,
+            )
+
+        time_limit = new_time + datetime.timedelta(min=60)
+
+        time_check = appointment_model.get(
+            preferred_date=time_limit, doctor_id=doctor_id
+        )
+        if time_check:
+            return (
+                jsonify(
+                    {
+                        "error": "The time being rescheduled to must have atleast a 1 hour gap between other appointments"
+                    }
+                ),
+                409,
+            )
+
+        # Send Email
+        patient_id = appointment_model.get("patient_id")
+
+        patient_model = BaseModel("patients")
+        patient = patient_model.get(id=patient_id)
+
+        if not patient:
+            return (
+                jsonify(
+                    {
+                        "error": "Patient for said appointment does not exist or was not found"
+                    }
+                ),
+                404,
+            )
+
+        # Send Email
+        doctor_model = BaseModel("doctors")
+
+        doctor = doctor_model.get(id=doctor_id)
+        name = f"Dr. {doctor.get('firstname')} {doctor.get('lastname')}"
+
+        # Send Email to patient
+        patient_email = patient.get("email")
+        subject = "Appointment Rescheduling"
+        email_message = f"""
+            Your appointment with {name} has been rescheduled from {old_time.split('T')[0]} {old_time.split('T')[1]}
+            to {new_time.split('T')[0]} {new_time.split('T')[1]}\n
+            Thank you.
+        """
+
+        sent = send_email(patient_email, email_message, subject)
+        if not sent:
+            return (
+                jsonify(
+                    {
+                        "error": "An error occured while trying to send the email, please try again"
+                    }
+                ),
+                500,
+            )
+
+        # Send email to doctor
+        doctor_email = doctor.get("email")
+
+        email_message = f"""
+                Hello {name} your appointment with {patient.get('firstname')} {patient.get('lastname')} 
+                has been rescheduled to {format_date(timestamp=new_time)} at {format_time(timestamp=new_time)}.\n
+
+                If you have any 
+            """
+        sent = send_email(
+            doctor_email,
         )
 
-        # Send email
-        patient = patient_model.get(id=appt.get("patient_id"))
-        if patient:
-            patient = patient[0]
-            patient_email = patient.get("email")
-
-            old_date, old_time = old_date_time.split("T")
-            new_date, new_time = new_date_time.split("T")
-
-            doctor_model = BaseModel("users")
-            doctor_data = doctor_model.get(id=doctor_id)
-            if doctor_data:
-                doctor_data = doctor_data[0]
-                doctor_name = (
-                    f"{doctor_data.get('first_name')} {doctor_data.get('last_name')}"
-                )
-            else:
-                doctor_name = f"Dr. {doctor_id}"
-
-            if patient_email:
-                appointment_rescheduled(
-                    patient_email, doctor_name, old_date, old_time, new_date, new_time
-                )
+        # Update appointment
+        appointment_model.update(preferred_date=new_time, where={"id": id})
 
         return (
             jsonify(
                 {
-                    "message": "appointment rescheduled and email sent",
+                    "message": "Appointment successfully rescheduled and email sent successfully",
                     "appointment_id": id,
                 }
             ),
@@ -704,26 +891,6 @@ def visits():
 
     visits = visit_model.get(doctor_id=doctor_id)
 
-    return jsonify({
-        "visits": visits
-    }), 200
-
-
-
-    appointments.set(
-        patient_id=patient_id,
-        doctor_id=doctor_id,
-        preferred_date=preferred_date,
-        reason=reason,
-    )
-    new_appointment = appointments.get(
-        doctor_id=doctor_id, preferred_date=preferred_date
-    )
-
-    if not new_appointment:
-        return jsonify(
-            {"error": "An error ocurred while trying to create the appointment"}
-        )
     return (
         jsonify(
             {
@@ -733,4 +900,3 @@ def visits():
         ),
         200,
     )
-

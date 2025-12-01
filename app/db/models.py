@@ -1,6 +1,7 @@
 """
 This file contains all the functions for querying the database.
 """
+import bcrypt
 from .connection import db_connection
 
 

@@ -10,6 +10,24 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE staff(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    firstname VARCHAR(50) NOT NULL,
+    lastname VARCAHR(50),
+    email VARCHAR(50) NOT NULL,
+    position VARCAHR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+CREATE TABLE doctors(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    firstname VARCHAR(50) NOT NULL,
+    lastname VARCHAR(50),
+    email VARCHAR(255) NOT NULL,
+    specialization VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     first_name VARCHAR(50) NOT NULL,
@@ -58,6 +76,18 @@ CREATE TABLE audit_logs (
     resource_id INT,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE patient_records(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID REFERENCES patients(id) NOT NULL ON DELETE CASCADE,
+    height SMALLINT,
+    weight SMALLINT,
+    blood_type VARCHAR(3),
+    organ_donor BOOLEAN DEFAULT FALSE,
+    allergies TEXT,
+    medical_conditions TEXT
+
+)
 
 """
 

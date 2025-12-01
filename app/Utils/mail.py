@@ -2,7 +2,7 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 import os
-
+from smtplib import SMTPResponseException
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,11 +16,14 @@ def send_email(email, body, subject):
     message["Subject"] = subject
     message["From"] = "fortunefoluso@gmail.com"
     message["To"] = email
-
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(EMAIL_ADDR, EMAIL_PW)
-        server.sendmail(message["From"], message["To"], message.as_string())
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(EMAIL_ADDR, EMAIL_PW)
+            server.sendmail(message["From"], message["To"], message.as_string())
+        return True
+    except SMTPResponseException:
+        return False
 
 
 def send_login_alert(user_email):
