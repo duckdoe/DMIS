@@ -1,43 +1,27 @@
 import os
 from flask import request, jsonify, send_from_directory, url_for
-from .db.models import BaseModel, create_documents
+from .db.models import BaseModel, create_documents,create_appointment
 from app.upload_route import allowed_file, create_folder, create_patient_folder
 from werkzeug.utils import secure_filename
-from .utils.mail import send_email
+from .Utils.mail import(send_email, 
+                        appointment_scheduled,
+                        appointment_rejected,
+                        appointment_rescheduled,
+                        ) 
 import datetime
 import jwt
-from .utils.mail import (
+from .Utils.mail import (
     appointment_scheduled,
     appointment_rejected,
     appointment_rescheduled,
 )
+from .Utils.format import format_date, format_time
+from .Utils.otp import authorize_user
+from .Utils.rate_limiter import rate_limit
+from .Utils.hash import hash_password, verify
 from app import app
-from .utils.format import format_date
-from .utils.format import format_time
-from .utils.otp import authorize_user
-from .db.models import BaseModel, create_appointment
-from .utils.rate_limiter import rate_limit
-from .utils.hash import hash_password, verify
-from .utils.mail import appointment_scheduled
-from .utils.mail import appointment_rejected
-from .utils.mail import appointment_rescheduled
-from .db.models import BaseModel
-from flask import request
-from flask import jsonify
-import os
-import jwt
-import datetime
-from flask import request
-from flask import jsonify
-from app import app
-from datetime import datetime
-from .db.models import BaseModel
-from .db.models import create_appointment
-from .utils.hash import hash_password
-from .utils.hash import verify
-from .utils.checkers import is_valid_date
+from .Utils.checkers import is_valid_date
 from .middleware import authenticate_user
-from .utils.rate_limiter import rate_limit
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
