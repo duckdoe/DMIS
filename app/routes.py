@@ -24,10 +24,10 @@ from .utils.rate_limiter import rate_limit
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 
-# @app.before_request
-# def before_request():
-#     # Limits the amounts of requests recieved to a 100
-#     return rate_limit(20)
+@app.before_request
+def before_request():
+    # Limits the amounts of requests recieved to a 100
+    return rate_limit(20)
 
 
 @app.route("/upload/test")
