@@ -1,0 +1,155 @@
+### SIGNUP REQUEST FOR RECEPTIONIST
+POST http://localhost:5000/auth/signup
+Content-Type: application/json
+
+{
+  "firstname": "Fortune",
+  "lastname": "duckdoe",
+  "email": "fortunefoluso23@gmail.com",
+  "password": "duckdb123",
+  "role": "receptionist"
+}
+
+### SIGNUP REQUEST FOR DOCTOR
+POST http://localhost:5000/auth/signup
+Content-Type: application/json
+
+{
+  "firstname": "Duckdoe",
+  "lastname": "Fortune",
+  "email": "lovelynfoluso@gmail.com",
+  "password": "duckdb123",
+  "role": "doctor" 
+}
+
+### LOGIN REQUEST FOR RECEPTIONIST
+POST http://localhost:5000/auth/login
+Content-Type: application/json
+
+{
+  "email": "fortunefoluso23@gmail.com",
+  "password": "duckdb123"
+}
+
+### LOGIN REQUEST FOR DOCTOR
+POST http://localhost:5000/auth/login
+Content-Type: application/json
+
+{
+  "email": "lovelynfoluso@gmail.com",
+  "password": "duckdb123"
+}
+
+### CREATE PATIENT
+POST http://localhost:5000/patient/create
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImM4ZGNhNDlkLTBjMDYtNDdhMy04YWFjLWJhOGQyOGI0Mzg4NiIsInJvbGUiOiJyZWNlcHRpb25pc3QifQ.FhE3HnATa_1dvdE3V1ArPPmQt7dajE78v0FpzNry6XI
+
+{
+  "firstname": "Fortune",
+  "lastname": "Duck",
+  "dob": "2003-12-01T00:00:00Z",
+  "gender": "male",
+  "email": "fortunefoluso@gmail.com"
+}
+
+### CREATE APPOINTMENT REQUEST
+POST http://localhost:5000/appointments-requests
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRlYTliYmE3LWMwMDEtNDdhMi05MTViLWExMTMyZWNhYWM0ZSIsImVtYWlsIjoiZm9ydHVuZWZvbHVzb0BnbWFpbC5jb20ifQ.3VxTTnJ7BL9JHSqdZ_HuYFj3V4oWxMeR0ASS7gPWTl8
+
+{
+  "doctor_name": "Duckdoe",
+  "preferred_date": "2025-12-1T15:00:00",
+  "reason": "Diabetes"
+}
+
+### CHECK PENDING APPOINTMENTS DOCTOR
+GET http://localhost:5000/appointments/4a19fef5-2905-4615-8e18-96e7b82ddb21/pending
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRhMTlmZWY1LTI5MDUtNDYxNS04ZTE4LTk2ZTdiODJkZGIyMSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImxvdmVseW5mb2x1c29AZ21haWwuY29tIn0.9Qmsh8LpD7PGkZO-HGtRuYWQT_jryKQswoeOVyiP59A
+
+
+### APPROVE APPOINTMENT
+PATCH http://localhost:5000/appointments/0993715e-7861-4524-894b-025980f36864/approve
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRhMTlmZWY1LTI5MDUtNDYxNS04ZTE4LTk2ZTdiODJkZGIyMSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImxvdmVseW5mb2x1c29AZ21haWwuY29tIn0.9Qmsh8LpD7PGkZO-HGtRuYWQT_jryKQswoeOVyiP59A
+
+{
+  "status": "APPROVED"
+}
+
+### LOGIN PATIENT
+POST http://localhost:5000/patient/verify-otp?id=dea9bba7-c001-47a2-915b-a1132ecaac4e
+Content-Type: application/json
+
+{
+  "otp": "463564"
+}
+
+### FORM REQUEST
+POST http://localhost:5000/upload/test
+Content-Type: multipart/form-data
+Accept: image/png
+
+{
+  "image": ""
+}
+
+### GET VISITS
+GET http://localhost:5000/visit/ccadc21f-d3c1-42a4-8e48-dc2d48cea5df
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4N2RmMGU0LWMzNWYtNGIxYy1iN2FiLTc3NTZhMDc4ZDViMyIsInJvbGUiOiJyZWNlcHRpb25pc3QiLCJlbWFpbCI6ImZvcnR1bmVmb2x1c28yM0BnbWFpbC5jb20ifQ.gnZJq4Rly1OyqiOGzSmDaqoGalW60LNWRItdI_mYQl0
+
+### CREATE VISITS
+POST http://localhost:5000/visits
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4N2RmMGU0LWMzNWYtNGIxYy1iN2FiLTc3NTZhMDc4ZDViMyIsInJvbGUiOiJyZWNlcHRpb25pc3QiLCJlbWFpbCI6ImZvcnR1bmVmb2x1c28yM0BnbWFpbC5jb20ifQ.gnZJq4Rly1OyqiOGzSmDaqoGalW60LNWRItdI_mYQl0
+
+{
+ "patient_id": "dea9bba7-c001-47a2-915b-a1132ecaac4e",
+ "appointment_id": "0993715e-7861-4524-894b-025980f36864",
+ "notes": "Was here for a diabetics check up."
+}
+
+
+### GET ALL VISITS 
+GET  http://localhost:5000/visits
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4N2RmMGU0LWMzNWYtNGIxYy1iN2FiLTc3NTZhMDc4ZDViMyIsInJvbGUiOiJyZWNlcHRpb25pc3QiLCJlbWFpbCI6ImZvcnR1bmVmb2x1c28yM0BnbWFpbC5jb20ifQ.gnZJq4Rly1OyqiOGzSmDaqoGalW60LNWRItdI_mYQl0
+
+
+### UPDATE PATIENT INFORMATION
+PUT http://localhost:5000/patients/dea9bba7-c001-47a2-915b-a1132ecaac4e
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4N2RmMGU0LWMzNWYtNGIxYy1iN2FiLTc3NTZhMDc4ZDViMyIsInJvbGUiOiJyZWNlcHRpb25pc3QiLCJlbWFpbCI6ImZvcnR1bmVmb2x1c28yM0BnbWFpbC5jb20ifQ.gnZJq4Rly1OyqiOGzSmDaqoGalW60LNWRItdI_mYQl0
+
+{
+  "firstname": "Fortune",
+  "lastname": "Duck",
+  "email": "fortuneisaboy@gmail.com"
+}
+
+
+### GET ALL PATIENTS
+GET http://localhost:5000/patients
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE4N2RmMGU0LWMzNWYtNGIxYy1iN2FiLTc3NTZhMDc4ZDViMyIsInJvbGUiOiJyZWNlcHRpb25pc3QiLCJlbWFpbCI6ImZvcnR1bmVmb2x1c28yM0BnbWFpbC5jb20ifQ.gnZJq4Rly1OyqiOGzSmDaqoGalW60LNWRItdI_mYQl0
+
+
+### RESCHEDULE APPOINTMENT
+PATCH http://localhost:5000/appointment/0993715e-7861-4524-894b-025980f36864/reschedule
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRhMTlmZWY1LTI5MDUtNDYxNS04ZTE4LTk2ZTdiODJkZGIyMSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImxvdmVseW5mb2x1c29AZ21haWwuY29tIn0.9Qmsh8LpD7PGkZO-HGtRuYWQT_jryKQswoeOVyiP59A
+
+{
+  "preferred_date": "2025-12-3T15:00:00"
+}
+
+### REJECT APPOINTMENT
+PATCH http://localhost:5000/appointments/0993715e-7861-4524-894b-025980f36864/reject
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRhMTlmZWY1LTI5MDUtNDYxNS04ZTE4LTk2ZTdiODJkZGIyMSIsInJvbGUiOiJkb2N0b3IiLCJlbWFpbCI6ImxvdmVseW5mb2x1c29AZ21haWwuY29tIn0.9Qmsh8LpD7PGkZO-HGtRuYWQT_jryKQswoeOVyiP59A
+
+{
+  "reason": "I dont have enough time for this appointment"
+}

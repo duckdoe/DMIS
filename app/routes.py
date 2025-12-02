@@ -24,10 +24,19 @@ from .utils.rate_limiter import rate_limit
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 
-@app.before_request
-def before_request():
-    # Limits the amounts of requests recieved to a 100
-    return rate_limit(20)
+# @app.before_request
+# def before_request():
+#     # Limits the amounts of requests recieved to a 100
+#     return rate_limit(20)
+
+
+@app.route("/upload/test")
+def upload_test():
+    if request.form:
+        print(request.files)
+        return "Works"
+
+    return "Doesn't work"
 
 
 @app.post("/auth/signup")
@@ -282,7 +291,15 @@ def get_patient(id):
 
 
 @app.get("/patients")  # searching patients with specific keywords
-def get_patients():
+def get_all_patients():
+    token = authenticate_user()
+    if type(token) is not dict:
+        return token
+
+    role = token.get("role")
+    if role != "receptionist":
+        return jsonify({"error": "Unauthorized"}), 403
+
     search = request.args.get("search")
     data = BaseModel("patients")
     if search:
@@ -300,7 +317,6 @@ def update_patients(id):
             return token
 
         role = token.get("role")
-        patient_id = token.get("id")
 
         if role != "receptionist":
             return jsonify({"error": "Unauthorized access"}), 403
@@ -309,31 +325,25 @@ def update_patients(id):
 
         firstname = data.get("firstname")
         lastname = data.get("lastname")
-
-        if not is_valid_date(data.get("dob")):
-            return (
-                jsonify({"error": "Invalid date format provided as date of birth"}),
-                400,
-            )
-
-        dob = is_valid_date(data.get("dob"))
-        gender = data.get("gender")
         email = data.get("email")
 
         patient_model = BaseModel("patients")
-        patient = patient_model.get(id=patient_id)
+        patient = patient_model.get(id=id)
 
         if not patient:
             return jsonify({"error": "Patient not found"}), 404
 
         complete_fields = []
-        for field in [firstname, lastname, dob, gender, email]:
+        for field in [firstname, lastname, email]:
             if not field:
                 continue
             complete_fields.append(field)
 
         patient_model.update(
             where={"id": id},
+            first_name=firstname,
+            last_name=lastname,
+            email=email,
         )
         return {"Patient Updated Successfully": patient}, 200
 
@@ -361,6 +371,15 @@ def delete_patient(id):
 # ---- DOCUMENT ROUTES ----#
 @app.post("/patients/<id>/documents")  # uploading a patient documents
 def upload_document(id):
+    token = authenticate_user()
+
+    if type(token) is not dict:
+        return token
+
+    role = token.get("role")
+    if role != "receptionist":
+        return jsonify({"error": "Unauthorized"}), 403
+
     file = request.files.get("file")
 
     if not file or file.filename == "":
@@ -381,9 +400,7 @@ def upload_document(id):
     )
 
     # optional form fields
-    uploader_id = request.form.get(
-        "uploader_id"
-    )  # optional, expect UUID string or None
+    uploader_id = token.get("id")  # optional, expect UUID string or None
     document_type = request.form.get("document_type")  # optional
     mime_type = file.mimetype if hasattr(file, "mimetype") else None
 
@@ -391,7 +408,7 @@ def upload_document(id):
         patient_id=id,
         uploader_id=uploader_id,
         file_name=filename,
-        storage_path=file_path,
+        storage_path=file_url,
         mime_type=mime_type,
         document_type=document_type,
     )
@@ -403,7 +420,7 @@ def upload_document(id):
 
 
 @app.get("/patients/<id>/documents")  # listing all documents of a patient
-def list_patient_documents(id: int):
+def list_patient_documents(id):
     docs = BaseModel("documents")
 
     # get all documents for this patient
@@ -420,7 +437,17 @@ def list_patient_documents(id: int):
     "/documents/<patient_id>/download/<file_name>"
 )  # to download or preview documents of patients
 def uploaded_file(patient_id, file_name):
-    patient_folder = os.path.join(app.config["UPLOAD_FOLDER"], patient_id)
+    token = authenticate_user()
+    if type(token) is not dict:
+        return token
+
+    role = token.get("role")
+    if role != "receptionist" or role != "doctor":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    upload_folder = app.config["UPLOAD_FOLDER"]
+
+    patient_folder = os.path.join(upload_folder, patient_id)
     return send_from_directory(patient_folder, file_name)
 
 
@@ -695,6 +722,11 @@ def reject_appointment(id):
         if type(token) is not dict:
             return token
 
+        role = token.get("role")
+
+        if role != "doctor":
+            return jsonify({"error": "Unauthorized"}), 403
+
         data = request.get_json()
 
         reason = data.get("reason")
@@ -709,7 +741,7 @@ def reject_appointment(id):
                 400,
             )
 
-        doctor_id = token.get("user_id")
+        doctor_id = token.get("id")
         appointments_model = BaseModel("appointments")
         patient_model = BaseModel("patients")
 
@@ -752,10 +784,10 @@ def reject_appointment(id):
                 404,
             )
 
-        appointment_date = appointments.get("preferred_date").split("T")[0]
-        appointment_time = appointments.get("preferred_date").split("T")[1]
+        appointment_date = appointments.get("preferred_date").strftime("%d/%m/%Y")
+        appointment_time = appointments.get("preferred_date").strftime("%H:%M:%S")
 
-        doctor_model = BaseModel("doctor")
+        doctor_model = BaseModel("users")
         doctor = doctor_model.get(id=doctor_id)
 
         if not doctor:
@@ -777,7 +809,7 @@ def reject_appointment(id):
         subject = "Appointment rejection"
         email_message = f"""
                             Hello {patient.get("firstname")} {patient.get("lastname")}\n 
-                            Your appointment with {name} made on the {appointment_date} {appointment_time} has been rejected for the following reason.\n\n
+                            Your appointment with {name} made at{appointment_date} {appointment_time} has been rejected for the following reason.\n\n
                             '{reason}'.\n\n
 
                             Please consider rescheduling with the same doctor or a different doctor.\nThank you for your understanding.
@@ -822,7 +854,11 @@ def reschedule_appointment(id):
         if type(token) is not dict:
             return token
 
-        doctor_id = token.get("user_id")
+        role = token.get("role")
+        if role != "doctor":
+            return jsonify({"error": "Unauthorized"}), 403
+
+        doctor_id = token.get("id")
         appointment_model = BaseModel("appointments")
 
         appointment = appointment_model.get(id=id)
@@ -830,7 +866,7 @@ def reschedule_appointment(id):
         if not appointment:
             return jsonify({"error": "Appointment not found"}), 404
 
-        if appointment.get("id") != doctor_id:
+        if appointment.get("doctor_id") != doctor_id:
             return (
                 jsonify(
                     {
@@ -843,7 +879,7 @@ def reschedule_appointment(id):
         if appointment.get("status") != "PENDING":
             return jsonify(
                 {
-                    "error": "Appointment has either been rejected, approved or rescheduled, to "
+                    "error": "Appointment has either been rejected, approved or rescheduled"
                 }
             )
 
@@ -863,7 +899,10 @@ def reschedule_appointment(id):
                 400,
             )
 
-        old_time = appointment.get("preffered_date")
+        old_time = appointment.get("preferred_date")
+        new_time = is_valid_date(new_time)
+
+        print(type(old_time), type(new_time))
 
         if new_time == old_time or new_time < old_time:
             return jsonify(
@@ -871,7 +910,7 @@ def reschedule_appointment(id):
                     "error": "The new time for the appointment must be greater than the old time"
                 }
             )
-        if new_time <= old_time + datetime.timedelta(min=60):
+        if new_time <= old_time + datetime.timedelta(minutes=60):
             return (
                 jsonify(
                     {"error": "Pick a preferred date that is atleast an hour from now"}
@@ -879,7 +918,7 @@ def reschedule_appointment(id):
                 400,
             )
 
-        time_limit = new_time + datetime.timedelta(min=60)
+        time_limit = new_time + datetime.timedelta(minutes=60)
 
         time_check = appointment_model.get(
             preferred_date=time_limit, doctor_id=doctor_id
@@ -895,7 +934,7 @@ def reschedule_appointment(id):
             )
 
         # Send Email
-        patient_id = appointment_model.get("patient_id")
+        patient_id = appointment.get("patient_id")
 
         patient_model = BaseModel("patients")
         patient = patient_model.get(id=patient_id)
@@ -911,17 +950,22 @@ def reschedule_appointment(id):
             )
 
         # Send Email
-        doctor_model = BaseModel("doctors")
+        doctor_model = BaseModel("users")
 
         doctor = doctor_model.get(id=doctor_id)
         name = f"Dr. {doctor.get('firstname')} {doctor.get('lastname')}"
+
+        old_date = old_time.strftime("%d/%m/%Y")
+        old_time = old_time.strftime("%H:%M:%S")
+
+        new_date_format = new_time.strftime("%d/%m/%Y")
+        new_time_format = new_time.strftime("%H:%M:%S")
 
         # Send Email to patient
         patient_email = patient.get("email")
         subject = "Appointment Rescheduling"
         email_message = f"""
-            Your appointment with {name} has been rescheduled from {old_time.split("T")[0]} {old_time.split("T")[1]}
-            to {new_time.split("T")[0]} {new_time.split("T")[1]}\n
+            Your appointment with {name} has been rescheduled from {old_date} {old_time} to {new_date_format} {new_time_format}\n
             Thank you.
         """
 
@@ -941,13 +985,11 @@ def reschedule_appointment(id):
 
         email_message = f"""
                 Hello {name} your appointment with {patient.get("firstname")} {patient.get("lastname")} 
-                has been rescheduled to {format_date(timestamp=new_time)} at {format_time(timestamp=new_time)}.\n
+                has been rescheduled at {new_date_format} {new_time_format}.\n
 
                 If you have any 
             """
-        sent = send_email(
-            doctor_email,
-        )
+        sent = send_email(doctor_email, email_message, subject)
 
         # Update appointment
         appointment_model.update(preferred_date=new_time, where={"id": id})
@@ -972,7 +1014,7 @@ def reschedule_appointment(id):
     )
 
 
-@app.route("/visits", methods=["POST", "GET"])
+@app.post("/visits")
 def visits():
     token = authenticate_user()
 
@@ -981,49 +1023,82 @@ def visits():
 
     role = token.get("role")
 
-    if role != "doctor":
+    if role != "receptionist":
         return (
             jsonify({"error": "Unauthorized you are not allowed to access this route"}),
             403,
         )
 
-    if request.method == "POST":
-        if not request.is_json():
-            return (
-                jsonify(
-                    {
-                        "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
-                    }
-                ),
-                500,
-            )
-
-        data = request.get_json()
-        patient_id = data.get("patient_id")
-        appointment_id = data.get("appointment_id")
-        notes = data.get("notes")
-
-        complete = all([patient_id, appointment_id, notes])
-        if not complete:
-            return jsonify({"error": "Missing fields in payload"}), 400
-
-        id = token.get("id")
-
-        visits_model = BaseModel("visits")
-        visits_model.set(
-            patient_id=patient_id,
-            doctor_id=id,
-            appointment_id=appointment_id,
-            notes=notes,
+    if not request.is_json:
+        return (
+            jsonify(
+                {
+                    "error": "Incomplete or malformed data recieved, try sending in a json payload instead?"
+                }
+            ),
+            500,
         )
 
-        visit = visits_model.get(appointment_id=appointment_id)
-        return jsonify({"success": "Visit successfully recorded", "visit": visit}), 201
+    data = request.get_json()
+    patient_id = data.get("patient_id")
+    appointment_id = data.get("appointment_id")
+    notes = data.get("notes")
 
-    doctor_id = token.get("user_id")
+    complete = all([patient_id, appointment_id, notes])
+    if not complete:
+        return jsonify({"error": "Missing fields in payload"}), 400
+
+    id = token.get("id")
+
+    visits_model = BaseModel("visits")
+    visits_model.set(
+        patient_id=patient_id,
+        receptionist_id=id,
+        appointment_id=appointment_id,
+        notes=notes,
+    )
+
+    visit = visits_model.get(appointment_id=appointment_id)
+    return jsonify({"success": "Visit successfully recorded", "visit": visit}), 201
+
+
+@app.get("/visits")
+def get_all_visits():
+    token = authenticate_user()
+
+    if type(token) is not dict:
+        return token
+
+    role = token.get("role")
+    if role != "receptionist":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    visits_model = BaseModel("visits")
+    visits = visits_model.get(all=True)
+
+    return jsonify(
+        {"success": "All visits to the hospital successfully fetched", "visits": visits}
+    ), 200
+
+
+@app.get("/visit/<id>")
+def get_visits(id):
+    token = authenticate_user()
+
+    if type(token) is not dict:
+        return token
+
+    role = token.get("role")
+
+    if role != "receptionist":
+        return (
+            jsonify({"error": "Unauthorized you are not allowed to access this route"}),
+            403,
+        )
+
     visit_model = BaseModel("visits")
 
-    visits = visit_model.get(doctor_id=doctor_id)
+    visits = visit_model.get(id=id)
 
     return (
         jsonify(
