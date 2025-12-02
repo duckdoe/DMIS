@@ -1,38 +1,25 @@
+import datetime
 import os
-from flask import request, jsonify, send_from_directory, url_for
-from .db.models import BaseModel, create_documents,create_appointment
-from app.upload_route import allowed_file, create_folder, create_patient_folder
+
+import jwt
+from flask import jsonify, request, send_from_directory, url_for
 from werkzeug.utils import secure_filename
-import datetime
-import jwt
+
 from app import app
-from .utils.format import format_date
-from .utils.format import format_time
-from .utils.otp import generate_otp, verify_otp, send_otp_mail
-from .db.models import BaseModel, create_appointment
-from .utils.rate_limiter import rate_limit
-from .utils.hash import hash_password, verify
-from .utils.mail import appointment_scheduled
-from .utils.mail import appointment_rejected
-from .utils.mail import appointment_rescheduled
-from .utils.mail import send_email
-from .utils.mail import send_patient_email
+from app.upload_route import allowed_file, create_folder, create_patient_folder
+
 from .db.models import BaseModel
-from flask import request
-from flask import jsonify
-from flask import url_for
-import os
-import jwt
-import datetime
-from flask import request
-from flask import jsonify
-from app import app
-from .db.models import BaseModel
-from .db.models import create_appointment
-from .utils.hash import hash_password
-from .utils.hash import verify
-from .utils.checkers import is_valid_date
 from .middleware import authenticate_user
+from .utils.checkers import is_valid_date
+from .utils.format import format_date, format_time
+from .utils.hash import hash_password, verify
+from .utils.mail import (
+    appointment_scheduled,
+    send_email,
+    send_patient_email,
+)
+from .utils.otp import generate_otp, send_otp_mail, verify_otp
+from .utils.rate_limiter import rate_limit
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
@@ -142,7 +129,7 @@ def create_patient():
             return jsonify({"error": "Missing fields in payload"}), 400
 
         token = authenticate_user()
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         if token.get("role") != "receptionist":
@@ -271,7 +258,7 @@ def verify_patient_otp():
 def get_patient(id):
     if request.is_json:
         token = authenticate_user()
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         patient_model = BaseModel("patients")
@@ -307,10 +294,9 @@ def get_patients():
 @app.put("/patients/<id>")  # updating a patient
 def update_patients(id):
     if request.is_json:
-
         token = authenticate_user()
 
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         role = token.get("role")
@@ -324,7 +310,7 @@ def update_patients(id):
         firstname = data.get("firstname")
         lastname = data.get("lastname")
 
-        if not is_valid_date(dob):
+        if not is_valid_date(data.get("dob")):
             return (
                 jsonify({"error": "Invalid date format provided as date of birth"}),
                 400,
@@ -461,7 +447,7 @@ def create_appointments_request():
 
         # Checks whether the authenticat_user() function returns something if so it becomes the response
 
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         data = request.get_json()
@@ -567,7 +553,7 @@ def pending_appointments(id):
     token = authenticate_user()
 
     # Checks whether the authenticat_user() function returns a valid response
-    if type(token) != dict:
+    if type(token) is not dict:
         return token
 
     doctor_id = token.get("id")
@@ -595,7 +581,7 @@ def approve_appointments(id):
     if request.is_json:
         token = authenticate_user()
 
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         data = request.get_json()
@@ -706,7 +692,7 @@ def reject_appointment(id):
     if request.is_json:
         token = authenticate_user()
 
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         data = request.get_json()
@@ -775,7 +761,7 @@ def reject_appointment(id):
         if not doctor:
             return jsonify({"error": "Doctor not found"})
 
-        name = f"Dr. {doctor.get("firstname")} {doctor.get('lastname')}"
+        name = f"Dr. {doctor.get('firstname')} {doctor.get('lastname')}"
 
         if not patient.get("email"):
             return (
@@ -833,7 +819,7 @@ def reschedule_appointment(id):
     if request.is_json:
         token = authenticate_user()
 
-        if type(token) != dict:
+        if type(token) is not dict:
             return token
 
         doctor_id = token.get("user_id")
@@ -934,8 +920,8 @@ def reschedule_appointment(id):
         patient_email = patient.get("email")
         subject = "Appointment Rescheduling"
         email_message = f"""
-            Your appointment with {name} has been rescheduled from {old_time.split('T')[0]} {old_time.split('T')[1]}
-            to {new_time.split('T')[0]} {new_time.split('T')[1]}\n
+            Your appointment with {name} has been rescheduled from {old_time.split("T")[0]} {old_time.split("T")[1]}
+            to {new_time.split("T")[0]} {new_time.split("T")[1]}\n
             Thank you.
         """
 
@@ -954,7 +940,7 @@ def reschedule_appointment(id):
         doctor_email = doctor.get("email")
 
         email_message = f"""
-                Hello {name} your appointment with {patient.get('firstname')} {patient.get('lastname')} 
+                Hello {name} your appointment with {patient.get("firstname")} {patient.get("lastname")} 
                 has been rescheduled to {format_date(timestamp=new_time)} at {format_time(timestamp=new_time)}.\n
 
                 If you have any 
@@ -990,7 +976,7 @@ def reschedule_appointment(id):
 def visits():
     token = authenticate_user()
 
-    if type(token) != dict:
+    if type(token) is not dict:
         return token
 
     role = token.get("role")
