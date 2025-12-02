@@ -11,7 +11,6 @@ from app.upload_route import allowed_file, create_folder, create_patient_folder
 from .db.models import BaseModel
 from .middleware import authenticate_user
 from .utils.checkers import is_valid_date
-from .utils.format import format_date, format_time
 from .utils.hash import hash_password, verify
 from .utils.mail import (
     appointment_scheduled,
