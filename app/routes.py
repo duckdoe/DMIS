@@ -6,26 +6,26 @@ from flask import jsonify, request, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 
 from app import app
-from app.upload_route import allowed_file, create_folder, create_patient_folder
+from .utils.upload import allowed_file, create_folder, create_patient_folder
 
 from .db.models import BaseModel
 from .middleware import authenticate_user
-from .utils.checkers import is_valid_date
-from .utils.hash import hash_password, verify
+from .utils.security import is_valid_date
+from .utils.security import hash_password, verify
 from .utils.mail import (
     appointment_scheduled,
     send_email,
     send_patient_email,
 )
-from .utils.otp import generate_otp, send_otp_mail, verify_otp
-from .utils.rate_limiter import rate_limit
+from .utils.security import generate_otp, send_otp_mail, verify_otp
+from .utils.security import rate_limit
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 
 @app.before_request
 def before_request():
-    # Limits the amounts of requests recieved to a 100
+    # Limits the amounts of requests recieved to a 20
     return rate_limit(20)
 
 
