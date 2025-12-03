@@ -857,7 +857,7 @@ def reschedule_appointment(id):
         if appointment.get("status") != "PENDING":
             return jsonify(
                 {
-                    "error": "Appointment has either been rejected, approved or rescheduled, to "
+                    "error": "Appointment has either been rejected, approved or rescheduled "
                 }
             )
 
