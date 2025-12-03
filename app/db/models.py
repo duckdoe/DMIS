@@ -1,6 +1,7 @@
 """
 This file contains all the functions for querying the database.
 """
+
 import bcrypt
 from .connection import db_connection
 
@@ -25,9 +26,13 @@ class BaseModel:
 
         with db_connection() as conn:
             cur = conn.cursor()
-            cur.execute(f"SELECT * FROM {self.table} WHERE {keys}", values)
 
-            if all == True:
+            if len(kwargs) > 0:
+                cur.execute(f"SELECT * FROM {self.table} WHERE {keys}", values)
+            else:
+                cur.execute(f"SELECT * FROM {self.table}")
+
+            if all is True:
                 data = cur.fetchall()
             else:
                 data = cur.fetchone()
@@ -79,16 +84,19 @@ class BaseModel:
             conn.commit()
 
     def search_patients_like(self, query):
-       like = f"%{query}%"
-       with db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("""
+        like = f"%{query}%"
+        with db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
             SELECT * FROM patients
             WHERE name LIKE %s
             OR phone LIKE %s
             OR email LIKE %s
-        """, (like, like, like))
-        return cur.fetchall()
+        """,
+                (like, like, like),
+            )
+            return cur.fetchall()
 
 
 # users = BaseModel("users")
