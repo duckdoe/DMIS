@@ -458,7 +458,7 @@ def approve_appointments(id):
             return jsonify({"error": "Invalid status provided, try 'approved'?"}), 400
 
         doctor_id = token.get("user_id")
-        appointment = appointments_model.get(id=id)
+        appointment = git appointments_model.get(id=id)
 
         # Checks if the appointment being approved exists
         if not appointment:
